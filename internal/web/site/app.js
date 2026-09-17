@@ -7,9 +7,31 @@ const toast = document.getElementById('toast');
 const activationGate = document.getElementById('activation-gate');
 const activationCurrent = document.getElementById('activation-current');
 const activationLeft = document.getElementById('activation-left');
+const upgradeNotice = document.getElementById('upgrade-notice');
+const upgradeDismiss = document.querySelector('[data-dismiss-upgrade]');
+const upgradeStorageKey = 'qday:v1.0.0-upgrade-dismissed';
 let refreshTimer;
 let rendered = false;
 let renderController;
+
+function upgradeDismissed() {
+  try { return localStorage.getItem(upgradeStorageKey) === '1'; }
+  catch { return false; }
+}
+
+function dismissUpgradeNotice() {
+  try { localStorage.setItem(upgradeStorageKey, '1'); }
+  catch (_) { }
+  upgradeNotice.hidden = true;
+  document.body.classList.remove('upgrade-notice-open');
+}
+
+upgradeDismiss.addEventListener('click', dismissUpgradeNotice);
+if (!upgradeDismissed()) {
+  upgradeNotice.hidden = false;
+  document.body.classList.add('upgrade-notice-open');
+  requestAnimationFrame(() => upgradeDismiss.focus({preventScroll:true}));
+}
 
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const short = (value, left = 12, right = 7) => value && value.length > left + right + 3 ? `${value.slice(0, left)}…${value.slice(-right)}` : value || '—';
