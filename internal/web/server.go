@@ -208,7 +208,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 	status := Status{Ready: mining.Ready && controller.Node.Synced, Stratum: s.cfg.StratumAddress, UpdatedAt: time.Now().UTC(), Error: controller.LastError}
 	status.Pool.Hashrate = floatFromBig(work) / 600
-	status.Pool.Connected, status.Pool.Workers, status.Pool.Miners = mining.Connected, workers, miners
+	status.Pool.Connected, status.Pool.Workers, status.Pool.Miners = mining.Authorized, workers, miners
 	status.Pool.Shares, status.Pool.Blocks = shares, uint64(blockCount)
 	if networkWork, ok := new(big.Int).SetString(mining.NetworkWork, 10); ok && networkWork.Sign() > 0 {
 		effort, _ := new(big.Float).Mul(new(big.Float).Quo(new(big.Float).SetInt(round), new(big.Float).SetInt(networkWork)), big.NewFloat(100)).Float64()

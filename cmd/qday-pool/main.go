@@ -96,7 +96,7 @@ func run() error {
 		initialDifficulty = flag.Float64("initial-difficulty", 4, "initial SiaMining share difficulty")
 		minimumDifficulty = flag.Float64("minimum-difficulty", .01, "minimum SiaMining share difficulty")
 		maximumDifficulty = flag.Float64("maximum-difficulty", 1e12, "maximum SiaMining share difficulty")
-		jobInterval       = flag.Duration("job-interval", time.Second, "fresh-job interval")
+		jobInterval       = flag.Duration("job-interval", 30*time.Second, "fresh-job interval")
 		maxMiners         = flag.Int("max-miners", 2048, "maximum simultaneous miner connections")
 		maxMinersPerIP    = flag.Int("max-miners-per-ip", 64, "maximum simultaneous miner connections per IP")
 		showVersion       = flag.Bool("version", false, "print version and exit")

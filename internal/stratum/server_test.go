@@ -160,6 +160,25 @@ func readWire(t *testing.T, reader *bufio.Reader) wireMessage {
 	return message
 }
 
+func TestNotificationWriteFailureEvictsConnection(t *testing.T) {
+	server := &Server{
+		clients:   make(map[*client]struct{}),
+		ipClients: make(map[string]int),
+	}
+	poolSide, minerSide := net.Pipe()
+	minerSide.Close()
+	client := newClient(server, poolSide, "127.0.0.1")
+	server.clients[client] = struct{}{}
+	server.ipClients[client.ip] = 1
+
+	if err := client.notify("mining.notify", []any{"job"}); err == nil {
+		t.Fatal("notification to a closed miner succeeded")
+	}
+	if snapshot := server.Snapshot(); snapshot.Connected != 0 || snapshot.Authorized != 0 {
+		t.Fatalf("failed miner remained connected: %+v", snapshot)
+	}
+}
+
 func TestPublicSiaStratumRoundTrip(t *testing.T) {
 	var target [32]byte
 	for i := range target {

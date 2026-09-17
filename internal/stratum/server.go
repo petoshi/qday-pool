@@ -27,11 +27,13 @@ import (
 )
 
 const (
-	maxRequestBytes   = 64 << 10
-	maxRememberedJobs = 8192
-	maxSubmissions    = 8192
-	maxRequestsSecond = 64
-	templateWorkers   = 16
+	maxRequestBytes    = 64 << 10
+	maxRememberedJobs  = 8192
+	maxSubmissions     = 8192
+	maxRequestsSecond  = 64
+	templateWorkers    = 16
+	defaultJobInterval = 30 * time.Second
+	minerWriteTimeout  = 60 * time.Second
 )
 
 type nodeClient interface {
@@ -114,7 +116,7 @@ func NewServer(node nodeClient, shares shareStore, cfg Config) (*Server, error) 
 		cfg.ListenAddress = "127.0.0.1:3333"
 	}
 	if cfg.JobInterval == 0 {
-		cfg.JobInterval = time.Second
+		cfg.JobInterval = defaultJobInterval
 	}
 	if cfg.JobInterval < 250*time.Millisecond {
 		return nil, errors.New("job interval cannot be below 250ms")
@@ -657,7 +659,7 @@ func (c *client) templateAndDifficulty() (*workTemplate, float64) {
 func (c *client) send(value any) error {
 	c.write.Lock()
 	defer c.write.Unlock()
-	if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(minerWriteTimeout)); err != nil {
 		return err
 	}
 	return json.NewEncoder(c.conn).Encode(value)
@@ -670,7 +672,11 @@ func (c *client) respond(id, result, failure any) {
 }
 
 func (c *client) notify(method string, params any) error {
-	return c.send(rpcNotification{ID: nil, Method: method, Params: params})
+	err := c.send(rpcNotification{ID: nil, Method: method, Params: params})
+	if err != nil {
+		c.close()
+	}
+	return err
 }
 
 func (c *client) sendJob(j *job, clean bool) error {

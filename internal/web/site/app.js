@@ -179,7 +179,7 @@ async function overview() {
     <section class="metric-grid">
       <div class="metric accent"><span>Pool hashrate</span><strong>${hashrate(status.pool.hashrate)}</strong><small>accepted work · 10 minute window</small></div>
       <div class="metric"><span>Network hashrate</span><strong>${hashrate(status.network.hashrate)}</strong><small>BLAKE2b-256 · difficulty ${difficulty(status.network.difficulty)}</small></div>
-      <div class="metric"><span>Connected miners</span><strong>${number(status.pool.connected)}</strong><small>${number(status.pool.miners)} addresses · ${number(status.pool.workers)} active workers</small></div>
+      <div class="metric"><span>Active miners</span><strong>${number(status.pool.miners)}</strong><small>${number(status.pool.workers)} active workers · ${number(status.pool.connected)} authorized sessions</small></div>
       <div class="metric"><span>Round effort</span><strong>${percent(status.pool.roundEffort)}</strong><small>expected work since last pool block</small></div>
       <div class="metric"><span>Pool blocks</span><strong>${number(status.pool.blocks)}</strong><small>${status.lastBlock ? `last at height ${number(status.lastBlock.height)}` : 'waiting for the first one'}</small></div>
       <div class="metric"><span>Next block template</span><strong>${number(status.network.templateTransactions)} TX</strong><small>${number(status.network.mempoolTransactions)} waiting in mempool · block weight limited</small></div>
@@ -200,7 +200,7 @@ async function blocksPage(params) {
 async function minersPage() {
   setNav('miners');
   const [status, data] = await Promise.all([api('/api/status'), api('/api/miners?limit=100')]); setLive(status);
-  app.innerHTML = `<section class="page-heading"><div><span class="kicker">LAST TEN MINUTES</span><h1>MINERS</h1><p>Accepted work by payout address and worker label.</p></div><div class="sync-state"><i class="sync-dot"></i> ${number(status.pool.connected)} CONNECTED</div></section>
+  app.innerHTML = `<section class="page-heading"><div><span class="kicker">LAST TEN MINUTES</span><h1>MINERS</h1><p>Accepted work by payout address and worker label.</p></div><div class="sync-state"><i class="sync-dot"></i> ${number(status.pool.miners)} ACTIVE</div></section>
     <section class="card"><div class="table-scroll"><table class="data-table miners-table"><thead><tr><th>#</th><th>Address</th><th>Worker</th><th class="numeric">Hashrate</th><th class="numeric">Shares</th><th>Last share</th></tr></thead><tbody>${minerRows(data.miners)}</tbody></table></div></section>`;
 }
 
