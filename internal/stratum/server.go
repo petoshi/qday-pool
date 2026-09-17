@@ -27,6 +27,9 @@ import (
 )
 
 const (
+	// ActivationHeight is the first mainnet block mined through the compact
+	// QDAY v1 SiaMining protocol.
+	ActivationHeight   = 9100
 	maxRequestBytes    = 64 << 10
 	maxRememberedJobs  = 8192
 	maxSubmissions     = 8192
@@ -71,6 +74,7 @@ type Snapshot struct {
 	NetworkDifficulty float64   `json:"networkDifficulty"`
 	NetworkHashrate   float64   `json:"networkHashrate"`
 	NetworkWork       string    `json:"networkWork"`
+	MiningActive      bool      `json:"miningActive"`
 	Connected         int       `json:"connected"`
 	Authorized        int       `json:"authorized"`
 	AcceptedShares    uint64    `json:"acceptedShares"`
@@ -100,9 +104,12 @@ type Server struct {
 	networkHash float64
 	networkWork string
 	updatedAt   time.Time
+	extra1Size  uint8
+	extra2Size  uint8
 
 	sequence       atomic.Uint64
 	workSequence   atomic.Uint64
+	extraSequence  atomic.Uint32
 	acceptedShares atomic.Uint64
 	rejectedShares atomic.Uint64
 	blocksFound    atomic.Uint64
@@ -162,7 +169,12 @@ func NewServer(node nodeClient, shares shareStore, cfg Config) (*Server, error) 
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
-	return &Server{node: node, store: shares, cfg: cfg, clients: make(map[*client]struct{}), ipClients: make(map[string]int), jobs: make(map[string]*job)}, nil
+	server := &Server{node: node, store: shares, cfg: cfg, clients: make(map[*client]struct{}), ipClients: make(map[string]int), jobs: make(map[string]*job)}
+	var seed [4]byte
+	if _, err := rand.Read(seed[:]); err == nil {
+		server.extraSequence.Store(binary.LittleEndian.Uint32(seed[:]))
+	}
+	return server, nil
 }
 
 func (s *Server) Run(ctx context.Context) error {
@@ -256,22 +268,47 @@ func (s *Server) templateLoop(ctx context.Context) {
 			longPollID = ""
 			continue
 		}
+		mempoolTransactions := template.MempoolTransactions
+		if template.Height >= ActivationHeight {
+			mempoolTransactions, err = mempoolTransactionCount(template)
+			if err != nil {
+				s.setTemplateError(err)
+				longPollID = ""
+				continue
+			}
+		}
 		s.mu.Lock()
 		previousParent := s.parent
 		s.parent, s.height, s.longPollID = parent, template.Height, template.LongPollID
-		s.ready, s.lastError, s.txCount = true, "", len(template.Transactions)
+		s.txCount = mempoolTransactions
+		s.extra1Size, s.extra2Size = template.Stratum.ExtraNonce1Size, template.Stratum.ExtraNonce2Size
 		s.networkDiff, _ = targetDifficulty(target)
 		networkWork := TargetWork(target)
 		hashrate, _ := new(big.Float).Quo(new(big.Float).SetInt(networkWork), big.NewFloat(60)).Float64()
 		s.networkHash, s.networkWork, s.updatedAt = hashrate, networkWork.String(), time.Now().UTC()
+		active := template.Height >= ActivationHeight && template.Stratum.ExtraNonce1Size == 4 && template.Stratum.ExtraNonce2Size == 4
+		s.ready = active
+		if active {
+			s.lastError = ""
+		} else {
+			s.lastError = "mining starts at block 9,100"
+		}
 		clients := make([]*client, 0, len(s.clients))
+		disconnect := make([]*client, 0, len(s.clients))
 		for client := range s.clients {
-			if client.authorized.Load() {
+			if !active {
+				disconnect = append(disconnect, client)
+			} else if client.authorized.Load() {
 				clients = append(clients, client)
 			}
 		}
 		s.mu.Unlock()
-		s.assignTemplates(ctx, clients)
+		for _, client := range disconnect {
+			client.close()
+		}
+		if active {
+			s.assignTemplates(ctx, clients)
+		}
 		if previousParent != parent {
 			retention := new(big.Int).Mul(networkWork, new(big.Int).SetUint64(s.cfg.PPLNSWindow*100))
 			if err := s.store.PruneShares(retention); err != nil {
@@ -416,6 +453,7 @@ func (s *Server) Snapshot() Snapshot {
 	}
 	return Snapshot{
 		Ready: s.ready, Height: s.height, Parent: hex.EncodeToString(s.parent[:]), Transactions: s.txCount,
+		MiningActive:      s.ready,
 		NetworkDifficulty: s.networkDiff, NetworkHashrate: s.networkHash, NetworkWork: s.networkWork, Connected: len(s.clients), Authorized: authorized,
 		AcceptedShares: s.acceptedShares.Load(), RejectedShares: s.rejectedShares.Load(), BlocksFound: s.blocksFound.Load(), UpdatedAt: s.updatedAt, LastError: s.lastError,
 	}
@@ -459,6 +497,7 @@ type client struct {
 	lastJob    uint64
 	shareTimes []time.Time
 	lastShare  time.Time
+	extraNonce [4]byte
 
 	submitMu sync.Mutex
 	submits  map[string]struct{}
@@ -467,7 +506,19 @@ type client struct {
 }
 
 func newClient(server *Server, conn net.Conn, ip string) *client {
-	return &client{server: server, conn: conn, ip: ip, difficulty: server.cfg.InitialDifficulty, submits: make(map[string]struct{}), rateAt: time.Now()}
+	c := &client{server: server, conn: conn, ip: ip, difficulty: server.cfg.InitialDifficulty, submits: make(map[string]struct{}), rateAt: time.Now()}
+	binary.LittleEndian.PutUint32(c.extraNonce[:], server.extraSequence.Add(1))
+	return c
+}
+
+func (c *client) extraNonceBytes(size uint8) []byte {
+	if size == 0 {
+		return nil
+	}
+	if size > uint8(len(c.extraNonce)) {
+		return nil
+	}
+	return append([]byte(nil), c.extraNonce[:size]...)
 }
 
 func (c *client) close() {
@@ -542,7 +593,14 @@ func (c *client) handle(ctx context.Context, request rpcRequest) {
 	case "mining.subscribe":
 		c.subscribed.Store(true)
 		subscription := strconv.FormatInt(time.Now().UnixNano(), 16)
-		c.respond(request.ID, []any{[]any{[]any{"mining.set_difficulty", subscription}, []any{"mining.notify", subscription}}, "", 0}, nil)
+		c.server.mu.Lock()
+		extra1Size, extra2Size, ready := c.server.extra1Size, c.server.extra2Size, c.server.ready
+		c.server.mu.Unlock()
+		if !ready {
+			c.respond(request.ID, nil, rpcFailure(20, "QDAY pool mining starts at block 9,100"))
+			return
+		}
+		c.respond(request.ID, []any{[]any{[]any{"mining.set_difficulty", subscription}, []any{"mining.notify", subscription}}, hex.EncodeToString(c.extraNonceBytes(extra1Size)), extra2Size}, nil)
 	case "mining.authorize":
 		if !c.subscribed.Load() {
 			c.respond(request.ID, false, rpcFailure(25, "subscribe before authorization"))
@@ -764,7 +822,7 @@ func (c *client) submit(ctx context.Context, request rpcRequest) {
 		c.respond(request.ID, false, rpcFailure(22, "duplicate share"))
 		return
 	}
-	block, hash, network, err := j.solve("", params[2], params[3], params[4])
+	block, hash, network, err := j.solve(params[2], params[3], params[4])
 	if err != nil {
 		c.server.rejectedShares.Add(1)
 		c.respond(request.ID, false, rpcFailure(23, err.Error()))

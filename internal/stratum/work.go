@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/petoshi/qday-pool/internal/nodeapi"
@@ -34,6 +35,9 @@ type workTemplate struct {
 	target       [32]byte
 	timestamp    int64
 	coinbase1    []byte
+	coinbase2    []byte
+	extra1Size   uint8
+	extra2Size   uint8
 	merkleBranch [][32]byte
 	block        []byte
 	networkDiff  float64
@@ -53,6 +57,7 @@ type job struct {
 	worker      string
 	sequence    uint64
 	timestamp   uint64
+	extraNonce1 []byte
 	difficulty  float64
 	shareTarget [32]byte
 }
@@ -67,12 +72,20 @@ func decode32(name, encoded string) ([32]byte, error) {
 	return value, nil
 }
 
+func mempoolTransactionCount(template nodeapi.Template) (int, error) {
+	const protocolTransactions = 2
+	if len(template.Transactions) < protocolTransactions {
+		return 0, errors.New("QDAY template is missing a protocol marker")
+	}
+	return len(template.Transactions) - protocolTransactions, nil
+}
+
 func newWorkTemplate(template nodeapi.Template) (*workTemplate, error) {
-	if template.LongPollID == "" || template.Height == 0 || template.Timestamp <= 0 || template.WorkNonce == 0 {
+	if template.LongPollID == "" || template.Height == 0 || template.Timestamp <= 0 {
 		return nil, errors.New("QDAY node returned an incomplete pool template")
 	}
 	if template.Stratum.Block == "" || template.PayoutAtomic == "" || template.FeesAtomic == "" {
-		return nil, errors.New("QDAY node has no pool template data; update QDAY to v0.8.1 or newer")
+		return nil, errors.New("QDAY node has no pool template data; update QDAY to v1.0.0 or newer")
 	}
 	blockReward, okReward := new(big.Int).SetString(template.BlockRewardAtomic, 10)
 	fees, okFees := new(big.Int).SetString(template.FeesAtomic, 10)
@@ -98,9 +111,28 @@ func newWorkTemplate(template nodeapi.Template) (*workTemplate, error) {
 	if err != nil {
 		return nil, err
 	}
-	coinbase1, err := hex.DecodeString(template.Transactions[len(template.Transactions)-1].Data)
+	coinbase1, err := hex.DecodeString(template.Stratum.Coinbase1)
 	if err != nil || len(coinbase1) == 0 {
-		return nil, errors.New("rightmost QDAY template transaction is invalid")
+		return nil, errors.New("QDAY Stratum coinbase1 is invalid")
+	}
+	coinbase2, err := hex.DecodeString(template.Stratum.Coinbase2)
+	if err != nil {
+		return nil, errors.New("QDAY Stratum coinbase2 is invalid")
+	}
+	if template.Height < ActivationHeight || template.Stratum.ExtraNonce1Size != 4 || template.Stratum.ExtraNonce2Size != 4 {
+		return nil, errors.New("QDAY pool mining starts at block 9,100 with a 4+4 byte extranonce split")
+	}
+	mempoolTransactions, err := mempoolTransactionCount(template)
+	if err != nil {
+		return nil, err
+	}
+	initialCoinbase := append([]byte(nil), coinbase1...)
+	var nonce [8]byte
+	binary.LittleEndian.PutUint64(nonce[:], template.WorkNonce)
+	initialCoinbase = append(initialCoinbase, nonce[:]...)
+	initialCoinbase = append(initialCoinbase, coinbase2...)
+	if !strings.EqualFold(hex.EncodeToString(initialCoinbase), template.Transactions[len(template.Transactions)-1].Data) {
+		return nil, errors.New("QDAY Stratum coinbase parts do not reconstruct the template transaction")
 	}
 	branches := make([][32]byte, len(template.Stratum.MerkleBranch))
 	if len(branches) > 64 {
@@ -112,7 +144,7 @@ func newWorkTemplate(template nodeapi.Template) (*workTemplate, error) {
 			return nil, err
 		}
 	}
-	root := transactionLeaf(coinbase1)
+	root := transactionLeaf(initialCoinbase)
 	for _, left := range branches {
 		root = merklePair(left, root)
 	}
@@ -157,12 +189,15 @@ func newWorkTemplate(template nodeapi.Template) (*workTemplate, error) {
 		target:       target,
 		timestamp:    template.Timestamp,
 		coinbase1:    coinbase1,
+		coinbase2:    coinbase2,
+		extra1Size:   template.Stratum.ExtraNonce1Size,
+		extra2Size:   template.Stratum.ExtraNonce2Size,
 		merkleBranch: branches,
 		block:        block,
 		networkDiff:  networkDiff,
 		bits:         template.Bits,
 		longPollID:   template.LongPollID,
-		transactions: len(template.Transactions),
+		transactions: mempoolTransactions,
 		rewardAtomic: template.PayoutAtomic,
 		feesAtomic:   template.FeesAtomic,
 		workNonce:    template.WorkNonce,
@@ -187,7 +222,8 @@ func (t *workTemplate) newJob(id string, sequence uint64, owner *client, timesta
 		}
 	}
 	address, worker := owner.identity()
-	return &job{workTemplate: t, id: id, owner: owner, address: address, worker: worker, sequence: sequence, timestamp: when, difficulty: difficulty, shareTarget: shareTarget}, nil
+	extraNonce1 := owner.extraNonceBytes(t.extra1Size)
+	return &job{workTemplate: t, id: id, owner: owner, address: address, worker: worker, sequence: sequence, timestamp: when, extraNonce1: extraNonce1, difficulty: difficulty, shareTarget: shareTarget}, nil
 }
 
 func transactionLeaf(transaction []byte) [32]byte {
@@ -256,12 +292,16 @@ func (j *job) notifyParams(clean bool) []any {
 	for i := range j.merkleBranch {
 		branches[i] = hex.EncodeToString(j.merkleBranch[i][:])
 	}
-	return []any{j.id, hex.EncodeToString(j.parent[:]), hex.EncodeToString(j.coinbase1), "", branches, "", j.bits, littleEndianHex(j.timestamp), clean}
+	return []any{j.id, hex.EncodeToString(j.parent[:]), hex.EncodeToString(j.coinbase1), hex.EncodeToString(j.coinbase2), branches, "", j.bits, littleEndianHex(j.timestamp), clean}
 }
 
-func (j *job) solve(extraNonce1, extraNonce2, encodedTime, encodedNonce string) (block []byte, hash [32]byte, network bool, err error) {
-	if extraNonce1 != "" || extraNonce2 != "" {
-		return nil, hash, false, errors.New("QDAY pool requires an empty extranonce")
+func (j *job) solve(extraNonce2, encodedTime, encodedNonce string) (block []byte, hash [32]byte, network bool, err error) {
+	if len(j.extraNonce1) != int(j.extra1Size) {
+		return nil, hash, false, errors.New("job has an invalid server extranonce")
+	}
+	extra2, err := hex.DecodeString(extraNonce2)
+	if err != nil || len(extra2) != int(j.extra2Size) {
+		return nil, hash, false, fmt.Errorf("extranonce2 must contain %d bytes of hexadecimal data", j.extra2Size)
 	}
 	timeBytes, err := hex.DecodeString(encodedTime)
 	if err != nil || len(timeBytes) != 8 {
@@ -274,7 +314,12 @@ func (j *job) solve(extraNonce1, extraNonce2, encodedTime, encodedNonce string) 
 	if err != nil || len(nonceBytes) != 8 {
 		return nil, hash, false, errors.New("nonce must contain 8 bytes of hexadecimal data")
 	}
-	root := transactionLeaf(j.coinbase1)
+	coinbase := make([]byte, 0, len(j.coinbase1)+len(j.extraNonce1)+len(extra2)+len(j.coinbase2))
+	coinbase = append(coinbase, j.coinbase1...)
+	coinbase = append(coinbase, j.extraNonce1...)
+	coinbase = append(coinbase, extra2...)
+	coinbase = append(coinbase, j.coinbase2...)
+	root := transactionLeaf(coinbase)
 	for _, left := range j.merkleBranch {
 		root = merklePair(left, root)
 	}
@@ -289,9 +334,33 @@ func (j *job) solve(extraNonce1, extraNonce2, encodedTime, encodedNonce string) 
 	}
 	network = bytes.Compare(hash[:], j.target[:]) <= 0
 	if network {
-		block = append([]byte(nil), j.block...)
-		copy(block[32:40], nonceBytes)
-		copy(block[40:48], timeBytes)
+		decoder := types.NewBufDecoder(j.block)
+		var encodedBlock types.V2Block
+		encodedBlock.DecodeFrom(decoder)
+		if decoder.Err() != nil {
+			return nil, hash, false, errors.New("stored QDAY block is invalid")
+		}
+		decodedBlock := encodedBlock.Cast()
+		if decodedBlock.V2 == nil || len(decodedBlock.V2.Transactions) == 0 {
+			return nil, hash, false, errors.New("stored QDAY block has no mining transaction")
+		}
+		coinbaseDecoder := types.NewBufDecoder(coinbase)
+		var work types.V2Transaction
+		work.DecodeFrom(coinbaseDecoder)
+		if coinbaseDecoder.Err() != nil {
+			return nil, hash, false, errors.New("reconstructed QDAY mining transaction is invalid")
+		}
+		decodedBlock.V2.Transactions[len(decodedBlock.V2.Transactions)-1] = work
+		decodedBlock.V2.Commitment = types.Hash256(root)
+		decodedBlock.Nonce = binary.LittleEndian.Uint64(nonceBytes)
+		decodedBlock.Timestamp = time.Unix(int64(binary.LittleEndian.Uint64(timeBytes)), 0)
+		var encoded bytes.Buffer
+		encoder := types.NewEncoder(&encoded)
+		types.V2Block(decodedBlock).EncodeTo(encoder)
+		if encoder.Flush() != nil {
+			return nil, hash, false, errors.New("could not encode solved QDAY block")
+		}
+		block = encoded.Bytes()
 	}
 	return block, hash, network, nil
 }

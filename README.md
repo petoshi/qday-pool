@@ -12,7 +12,7 @@ as the Stratum username.
 No account. No email. No balance trapped behind a withdrawal button.
 
 ```text
-QDAY v0.8.1+ node
+QDAY v1.0.0+ node
         ↓ transaction-aware templates
 qday-pool
         ↓ SiaMining Stratum · vardiff · independent work
@@ -27,18 +27,20 @@ share accounting, maturity, payouts and a public dashboard.
 
 ## Connect
 
+Public mining opens for block **9,100**. Before that candidate exists, the
+dashboard shows the activation height and Stratum returns a clear activation
+error. The pool never serves the legacy mining format.
+
 Use the receive address from your QDAY wallet as the username. Add `.worker`
 only when you want a name for that machine.
 
 ### GPU
 
-Download gominer for
-[Windows x64](https://github.com/robvanmieghem/gominer/releases/download/v0.6.1/gominer_win64_v0.6.1.zip)
-or [Linux x64](https://github.com/robvanmieghem/gominer/releases/download/v0.6/gominer_linux64),
+Download [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest),
 install the AMD or NVIDIA OpenCL driver, then replace `YOUR_QDAY_ADDRESS`:
 
 ```sh
-gominer \
+qday-gominer \
   -url stratum+tcp://pool.pqday.com:3333 \
   -user YOUR_QDAY_ADDRESS.gpu1
 ```
@@ -80,7 +82,7 @@ unit, the accounting does not guess, round or reinterpret old balances.
 
 ## Run an operator instance
 
-The pool needs QDAY Node `v0.8.1` or newer, its own QDAY wallet and a local API
+The pool needs QDAY Node `v1.0.0` or newer, its own QDAY wallet and a local API
 token. The node API and wallet password stay on the same server. Miners receive
 only the public Stratum endpoint.
 
@@ -106,17 +108,21 @@ backups and recovery.
 
 ## What the node adds
 
-QDAY `v0.8.1` gives a pool three local authenticated operations:
+QDAY `v1.0.0` gives a pool the authenticated operations and compact work
+required for standard SiaMining hardware:
 
 - `getblocktemplate` accepts a pool-selected `worknonce`, producing independent
   commitments for independent miners;
+- the final 33-byte mining-work transaction uses the standard 4-byte server and
+  4-byte miner extranonces;
 - `blockstatus` reports selected-chain and maturity state for a found block;
 - `pool/payout` signs an exact multi-recipient batch with a retry-safe request
   ID and persists it through restarts and reorganizations.
 
-None of these changes consensus, genesis, P2P or the block format. Old QDAY
-nodes validate blocks created by the pool. They do not need to update to remain
-on mainnet.
+The compact final marker becomes a consensus rule at block 9,100. The pool and
+QDAY gominer accept only that format. Genesis, P2P identity, balances and
+ordinary signed transactions stay unchanged. Older nodes must update before
+that block.
 
 ## Links
 

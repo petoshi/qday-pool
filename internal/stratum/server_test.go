@@ -18,15 +18,14 @@ import (
 
 	"github.com/petoshi/qday-pool/internal/nodeapi"
 	"github.com/petoshi/qday-pool/internal/store"
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 )
 
 func syntheticTemplate(t *testing.T, target [32]byte, workNonce uint64) nodeapi.Template {
 	t.Helper()
 	parent := [32]byte{0: 0x51, 31: 0x59}
-	txn := types.V2Transaction{ArbitraryData: make([]byte, 16)}
-	binary.LittleEndian.PutUint64(txn.ArbitraryData, workNonce)
-	copy(txn.ArbitraryData[8:], "QDAYPOOL")
+	txn := types.V2Transaction{ArbitraryData: (consensus.QdayEnvelope{Kind: consensus.QdayMiningWork, Nonce: workNonce}).Encode()}
 	var transaction bytes.Buffer
 	encoder := types.NewEncoder(&transaction)
 	txn.EncodeTo(encoder)
@@ -40,7 +39,7 @@ func syntheticTemplate(t *testing.T, target [32]byte, workNonce uint64) nodeapi.
 		ParentID:  types.BlockID(parent),
 		Timestamp: time.Unix(timestamp, 0),
 		V2: &types.V2BlockData{
-			Height:       42,
+			Height:       ActivationHeight,
 			Commitment:   types.Hash256(commitment),
 			Transactions: []types.V2Transaction{txn},
 		},
@@ -59,11 +58,18 @@ func syntheticTemplate(t *testing.T, target [32]byte, workNonce uint64) nodeapi.
 	}
 	return nodeapi.Template{
 		Header: hex.EncodeToString(header.Bytes()), Commitment: hex.EncodeToString(commitment[:]),
-		Transactions:      []nodeapi.TemplateTransaction{{Data: hex.EncodeToString(transaction.Bytes()), TxID: "marker"}},
+		Transactions: []nodeapi.TemplateTransaction{
+			{Data: "00", TxID: "coinbase"},
+			{Data: hex.EncodeToString(transaction.Bytes()), TxID: "work"},
+		},
 		PreviousBlockHash: hex.EncodeToString(parent[:]), LongPollID: "template-1", Target: hex.EncodeToString(target[:]),
-		Height: 42, Timestamp: timestamp, Bits: "207fffff", WorkNonce: workNonce,
+		Height: ActivationHeight, Timestamp: timestamp, Bits: "207fffff", WorkNonce: workNonce,
 		BlockRewardAtomic: "8000", FeesAtomic: "240000", PayoutAtomic: "248000",
-		Stratum: nodeapi.StratumTemplate{Block: hex.EncodeToString(encodedBlock.Bytes()), MerkleBranch: []string{hex.EncodeToString(left[:])}},
+		MempoolTransactions: 7,
+		Stratum: nodeapi.StratumTemplate{
+			Block: hex.EncodeToString(encodedBlock.Bytes()), Coinbase1: hex.EncodeToString(transaction.Bytes()[:23]), Coinbase2: hex.EncodeToString(transaction.Bytes()[31:]),
+			ExtraNonce1Size: 4, ExtraNonce2Size: 4, MerkleBranch: []string{hex.EncodeToString(left[:])},
+		},
 	}
 }
 
@@ -179,6 +185,18 @@ func TestNotificationWriteFailureEvictsConnection(t *testing.T) {
 	}
 }
 
+func TestPoolWaitsForV1Activation(t *testing.T) {
+	var target [32]byte
+	for i := range target {
+		target[i] = 0xff
+	}
+	template := syntheticTemplate(t, target, 1)
+	template.Height = ActivationHeight - 1
+	if _, err := newWorkTemplate(template); err == nil {
+		t.Fatal("accepted mining work before block 9,100")
+	}
+}
+
 func TestPublicSiaStratumRoundTrip(t *testing.T) {
 	var target [32]byte
 	for i := range target {
@@ -221,8 +239,19 @@ func TestPublicSiaStratumRoundTrip(t *testing.T) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 	writeRPC(t, conn, map[string]any{"id": 1, "method": "mining.subscribe", "params": []string{"gominer"}})
-	if message := readWire(t, reader); string(message.Error) != "null" {
+	subscribe := readWire(t, reader)
+	if string(subscribe.Error) != "null" {
+		message := subscribe
 		t.Fatalf("subscribe failed: %+v", message)
+	}
+	var subscription []json.RawMessage
+	if err := json.Unmarshal(subscribe.Result, &subscription); err != nil || len(subscription) != 3 {
+		t.Fatalf("invalid subscription result: %s, %v", subscribe.Result, err)
+	}
+	var extraNonce1 string
+	var extraNonce2Size int
+	if json.Unmarshal(subscription[1], &extraNonce1) != nil || json.Unmarshal(subscription[2], &extraNonce2Size) != nil || len(extraNonce1) != 8 || extraNonce2Size != 4 {
+		t.Fatalf("invalid extranonce assignment: %s", subscribe.Result)
 	}
 	writeRPC(t, conn, map[string]any{"id": 2, "method": "mining.authorize", "params": []string{login, "x"}})
 	if message := readWire(t, reader); string(message.Result) != "true" {
@@ -242,7 +271,7 @@ func TestPublicSiaStratumRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(notify.Params[7], &ntime); err != nil {
 		t.Fatal(err)
 	}
-	writeRPC(t, conn, map[string]any{"id": 3, "method": "mining.submit", "params": []string{login, jobID, "", ntime, "0000000000000000"}})
+	writeRPC(t, conn, map[string]any{"id": 3, "method": "mining.submit", "params": []string{login, jobID, "00000000", ntime, "0000000000000000"}})
 	if message := readWire(t, reader); string(message.Result) != "true" || string(message.Error) != "null" {
 		t.Fatalf("share failed: %+v", message)
 	}
@@ -302,7 +331,7 @@ func TestWorkerAndTimestampValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := job.solve("", "", littleEndianHex(job.timestamp+1), "0000000000000000"); err == nil {
+	if _, _, _, err := job.solve("00000000", littleEndianHex(job.timestamp+1), "0000000000000000"); err == nil {
 		t.Fatal("accepted timestamp outside the assigned job")
 	}
 	harder, err := template.newJob("harder", 2, owner, time.Now(), 1e12)
@@ -311,5 +340,34 @@ func TestWorkerAndTimestampValidation(t *testing.T) {
 	}
 	if harder.shareTarget != target || harder.difficulty != template.networkDiff {
 		t.Fatal("share target became harder than the network block target")
+	}
+}
+
+func TestCompactWorkReconstructsFullBlock(t *testing.T) {
+	var target [32]byte
+	for i := range target {
+		target[i] = 0xff
+	}
+	const workNonce = uint64(0x0807060504030201)
+	rawTemplate := syntheticTemplate(t, target, workNonce)
+	template, err := newWorkTemplate(rawTemplate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &client{address: "address", worker: "test", extraNonce: [4]byte{1, 2, 3, 4}}
+	job, err := template.newJob("job", 1, owner, time.Unix(rawTemplate.Timestamp, 0), template.networkDiff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _, network, err := job.solve("05060708", littleEndianHex(job.timestamp), "0000000000000000")
+	if err != nil || !network {
+		t.Fatalf("matching compact work did not solve template: network=%v err=%v", network, err)
+	}
+	want, err := hex.DecodeString(rawTemplate.Stratum.Block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(block, want) {
+		t.Fatal("compact extranonces did not reconstruct the node's complete block")
 	}
 }

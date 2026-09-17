@@ -55,7 +55,7 @@ This is the public PPLNS pool controller. It does not contain a wallet,
 seed phrase, API token, blockchain state or miner.
 
 Requirements:
-- QDAY Node v0.8.1 or newer on the same machine
+- QDAY Node v1.0.0 or newer on the same machine
 - an unlocked pool payout wallet
 - the node API bound to loopback
 

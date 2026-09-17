@@ -23,25 +23,30 @@ type TemplateTransaction struct {
 }
 
 type StratumTemplate struct {
-	Block        string   `json:"block"`
-	MerkleBranch []string `json:"merklebranch"`
+	Block           string   `json:"block"`
+	Coinbase1       string   `json:"coinbase1"`
+	Coinbase2       string   `json:"coinbase2"`
+	ExtraNonce1Size uint8    `json:"extranonce1Size"`
+	ExtraNonce2Size uint8    `json:"extranonce2Size"`
+	MerkleBranch    []string `json:"merklebranch"`
 }
 
 type Template struct {
-	Header            string                `json:"header"`
-	Commitment        string                `json:"commitment"`
-	Transactions      []TemplateTransaction `json:"transactions"`
-	PreviousBlockHash string                `json:"previousblockhash"`
-	LongPollID        string                `json:"longpollid"`
-	Target            string                `json:"target"`
-	Height            uint64                `json:"height"`
-	Timestamp         int64                 `json:"curtime"`
-	Bits              string                `json:"bits"`
-	WorkNonce         uint64                `json:"worknonce"`
-	BlockRewardAtomic string                `json:"blockRewardAtomic"`
-	FeesAtomic        string                `json:"feesAtomic"`
-	PayoutAtomic      string                `json:"payoutAtomic"`
-	Stratum           StratumTemplate       `json:"stratum"`
+	Header              string                `json:"header"`
+	Commitment          string                `json:"commitment"`
+	Transactions        []TemplateTransaction `json:"transactions"`
+	PreviousBlockHash   string                `json:"previousblockhash"`
+	LongPollID          string                `json:"longpollid"`
+	Target              string                `json:"target"`
+	Height              uint64                `json:"height"`
+	Timestamp           int64                 `json:"curtime"`
+	Bits                string                `json:"bits"`
+	WorkNonce           uint64                `json:"worknonce"`
+	BlockRewardAtomic   string                `json:"blockRewardAtomic"`
+	FeesAtomic          string                `json:"feesAtomic"`
+	PayoutAtomic        string                `json:"payoutAtomic"`
+	MempoolTransactions int                   `json:"mempoolTransactions"`
+	Stratum             StratumTemplate       `json:"stratum"`
 }
 
 type BlockStatus struct {

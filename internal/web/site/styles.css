@@ -169,6 +169,16 @@ main { width: 100%; max-width: 1540px; min-height: calc(100vh - 260px); margin: 
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 30; max-width: min(390px, calc(100vw - 44px)); padding: 11px 15px; transform: translateY(20px); border: 1px solid #595b64; border-radius: 3px; background: #24252b; box-shadow: 0 14px 35px rgba(0,0,0,.3); color: #eee; font-size: 11px; opacity: 0; pointer-events: none; transition: .18s; }
 .toast.show { transform: translateY(0); opacity: 1; }
 
+.activation-gate { position: fixed; z-index: 100; inset: 0; display: grid; padding: 22px; place-items: center; background: rgba(7, 8, 11, .82); backdrop-filter: blur(12px); }
+.activation-gate[hidden] { display: none; }
+.activation-dialog { width: min(620px, 100%); padding: clamp(28px, 5vw, 54px); border: 1px solid #604c3c; background: #17181d; box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }
+.activation-dialog > span { color: #c9a574; font: 800 10px/1 var(--mono); letter-spacing: .16em; }
+.activation-dialog h2 { margin: 15px 0 13px; color: #f2eee7; font: 800 clamp(42px, 8vw, 70px)/.9 Barlow, sans-serif; letter-spacing: -.015em; }
+.activation-dialog p { max-width: 510px; margin: 0; color: #a6a4ac; }
+.activation-dialog > div { display: grid; grid-template-columns: auto 1fr; gap: 8px 24px; margin-top: 30px; padding-top: 22px; border-top: 1px solid #34363e; }
+.activation-dialog b { align-self: center; color: #85848d; font: 800 9px/1 var(--mono); letter-spacing: .1em; }
+.activation-dialog strong { color: #f0c77d; font: 800 25px/1 Barlow, sans-serif; text-align: right; }
+
 footer { display: flex; min-height: 145px; align-items: center; justify-content: space-between; gap: 30px; padding: 28px var(--page-pad); border-top: 1px solid var(--chrome-line); background: #0d0e11; }
 .footer-brand { display: flex; align-items: center; gap: 18px; }
 .footer-brand img { width: 90px; }

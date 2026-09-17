@@ -4,6 +4,9 @@ const app = document.getElementById('app');
 const livePill = document.getElementById('live-pill');
 const liveLabel = document.getElementById('live-label');
 const toast = document.getElementById('toast');
+const activationGate = document.getElementById('activation-gate');
+const activationCurrent = document.getElementById('activation-current');
+const activationLeft = document.getElementById('activation-left');
 let refreshTimer;
 let rendered = false;
 let renderController;
@@ -75,8 +78,16 @@ async function copy(value) {
 function setLive(status) {
   livePill.classList.remove('connecting', 'offline');
   if (status?.ready) liveLabel.textContent = 'POOL LIVE';
+  else if (status?.network && !status.network.miningActive) { livePill.classList.add('connecting'); liveLabel.textContent = 'OPENS AT 9,100'; }
   else if (status) { livePill.classList.add('offline'); liveLabel.textContent = 'POOL WAITING'; }
   else { livePill.classList.add('connecting'); liveLabel.textContent = 'CONNECTING'; }
+  if (status?.network && !status.network.miningActive) {
+    activationCurrent.textContent = number(status.network.height);
+    activationLeft.textContent = number(status.network.blocksUntilActivation);
+    activationGate.hidden = false;
+  } else {
+    activationGate.hidden = true;
+  }
 }
 
 function setNav(name) {
@@ -147,10 +158,10 @@ function connection(status) {
     <div class="endpoint-row"><span>POOL ADDRESS</span><div class="copy-line"><code>${stratum}</code><button class="copy" data-copy="${stratum}">COPY</button></div></div>
     <div class="miner-setup-grid">
       <article class="miner-setup">
-        <div class="setup-title"><span>GPU</span><strong>GOMINER</strong></div>
-        <p>Install the AMD/NVIDIA OpenCL driver, download <b>gominer</b>, replace <b>YOUR_QDAY_ADDRESS</b>, then run:</p>
-        <div class="miner-downloads"><a href="https://github.com/robvanmieghem/gominer/releases/download/v0.6.1/gominer_win64_v0.6.1.zip" target="_blank" rel="noreferrer">WINDOWS X64 ↓</a><a href="https://github.com/robvanmieghem/gominer/releases/download/v0.6/gominer_linux64" target="_blank" rel="noreferrer">LINUX X64 ↓</a></div>
-        <code class="command">gominer -url ${stratum} -user YOUR_QDAY_ADDRESS.gpu1</code>
+        <div class="setup-title"><span>GPU</span><strong>QDAY-GOMINER</strong></div>
+        <p>Install the AMD/NVIDIA OpenCL driver, download <b>qday-gominer</b>, replace <b>YOUR_QDAY_ADDRESS</b>, then run:</p>
+        <div class="miner-downloads"><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/qday-gominer-1.0.0-linux-amd64.tar.gz" target="_blank" rel="noreferrer">LINUX X86-64 ↓</a><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/qday-gominer-1.0.0-linux-arm64.tar.gz" target="_blank" rel="noreferrer">LINUX ARM64 ↓</a><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/SHA256SUMS" target="_blank" rel="noreferrer">SHA-256 ↓</a></div>
+        <code class="command">qday-gominer -url ${stratum} -user YOUR_QDAY_ADDRESS.gpu1</code>
       </article>
       <article class="miner-setup">
         <div class="setup-title"><span>ASIC</span><strong>SIA HARDWARE</strong></div>

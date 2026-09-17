@@ -82,13 +82,16 @@ type Status struct {
 		RoundEffort float64 `json:"roundEffort"`
 	} `json:"pool"`
 	Network struct {
-		Height       uint64  `json:"height"`
-		Hashrate     float64 `json:"hashrate"`
-		Difficulty   float64 `json:"difficulty"`
-		Transactions int     `json:"templateTransactions"`
-		Mempool      int     `json:"mempoolTransactions"`
-		Peers        int     `json:"peers"`
-		Synced       bool    `json:"synced"`
+		Height                uint64  `json:"height"`
+		ActivationHeight      uint64  `json:"activationHeight"`
+		BlocksUntilActivation uint64  `json:"blocksUntilActivation"`
+		MiningActive          bool    `json:"miningActive"`
+		Hashrate              float64 `json:"hashrate"`
+		Difficulty            float64 `json:"difficulty"`
+		Transactions          int     `json:"templateTransactions"`
+		Mempool               int     `json:"mempoolTransactions"`
+		Peers                 int     `json:"peers"`
+		Synced                bool    `json:"synced"`
 	} `json:"network"`
 	Policy struct {
 		Method         string  `json:"method"`
@@ -215,6 +218,11 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		status.Pool.RoundEffort = effort
 	}
 	status.Network.Height, status.Network.Hashrate, status.Network.Difficulty = controller.Node.Height, mining.NetworkHashrate, mining.NetworkDifficulty
+	status.Network.ActivationHeight = stratum.ActivationHeight
+	status.Network.MiningActive = mining.MiningActive
+	if controller.Node.Height < stratum.ActivationHeight {
+		status.Network.BlocksUntilActivation = stratum.ActivationHeight - controller.Node.Height
+	}
 	status.Network.Transactions, status.Network.Mempool = mining.Transactions, controller.Node.Mempool
 	status.Network.Peers, status.Network.Synced = controller.Node.Peers, controller.Node.Synced
 	status.Policy.Method, status.Policy.Window, status.Policy.FeePercent, status.Policy.MaturityBlocks = "PPLNS", s.cfg.PPLNSWindow, float64(s.cfg.PoolFeeBPS)/100, 60
