@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111216">
+  <meta name="description" content="QDAY registration-free PPLNS pool for SiaMining-compatible BLAKE2b GPUs and ASICs.">
+  <title>QDAY Pool</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles.css?v=2">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand route-link" href="/" aria-label="QDAY Pool home">
+      <img src="/assets/logo.webp" alt="QDAY">
+      <span></span>
+      <strong>POOL</strong>
+    </a>
+    <nav class="main-nav" aria-label="Pool navigation">
+      <a class="route-link" data-nav="overview" href="/">Overview</a>
+      <a class="route-link" data-nav="blocks" href="/blocks">Blocks</a>
+      <a class="route-link" data-nav="miners" href="/miners">Miners</a>
+      <a class="route-link" data-nav="payouts" href="/payouts">Payouts</a>
+    </nav>
+    <nav class="external-nav" aria-label="Project links">
+      <a href="https://explorer.pqday.com" target="_blank" rel="noreferrer">Explorer ↗</a>
+      <a href="https://pqday.com" target="_blank" rel="noreferrer">Website ↗</a>
+      <a href="https://github.com/petoshi/qday-pool" target="_blank" rel="noreferrer">Code ↗</a>
+    </nav>
+    <div class="live-pill connecting" id="live-pill"><i></i><span id="live-label">CONNECTING</span></div>
+  </header>
+
+  <main id="app" aria-live="polite">
+    <section class="loading-page"><div class="loader"></div><p>Loading pool data…</p></section>
+  </main>
+
+  <footer>
+    <div class="footer-brand"><img src="/assets/logo.webp" alt="QDAY"><span>PUBLIC PPLNS · 99% TO MINERS</span></div>
+    <div class="footer-links">
+      <a href="https://explorer.pqday.com" target="_blank" rel="noreferrer">Explorer</a>
+      <a href="https://pqday.com" target="_blank" rel="noreferrer">Website</a>
+      <a href="https://github.com/petoshi/qday-pool" target="_blank" rel="noreferrer">Pool source</a>
+      <a href="https://github.com/petoshi/qday-stratum" target="_blank" rel="noreferrer">Solo bridge</a>
+      <a href="https://x.com/_petoshi" target="_blank" rel="noreferrer">petoshi</a>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/app.js?v=3" defer></script>
+</body>
+</html>

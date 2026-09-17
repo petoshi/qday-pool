@@ -1,0 +1,8 @@
+/build/
+/pool-data/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.log
+__pycache__/
+*.pyc

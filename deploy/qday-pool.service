@@ -1,0 +1,26 @@
+[Unit]
+Description=QDAY public PPLNS pool
+After=network-online.target qday-pool-node.service
+Wants=network-online.target
+Requires=qday-pool-node.service
+
+[Service]
+Type=simple
+User=qday
+Group=qday
+UMask=0077
+StateDirectory=qday-pool
+StateDirectoryMode=0700
+ExecStart=/usr/local/bin/qday-pool -node http://127.0.0.1:19770 -token-file /var/lib/qday-pool-node/api.token -wallet-password-file /etc/qday-pool/wallet-password -data /var/lib/qday-pool -stratum :3333 -http 127.0.0.1:8080 -public-stratum stratum+tcp://pool.pqday.com:3333 -pool-fee 1 -pplns 2 -minimum-payout 1 -payout-fee 0.001
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=QDAY pool validating node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qday
+Group=qday
+UMask=0077
+StateDirectory=qday-pool-node
+StateDirectoryMode=0700
+ExecStart=/usr/local/bin/qday --network /etc/qday-pool/qday-mainnet.json --data /var/lib/qday-pool-node --http 127.0.0.1:19770 --p2p :19771 --upnp=false
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
