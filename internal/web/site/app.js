@@ -6,6 +6,7 @@ const liveLabel = document.getElementById('live-label');
 const toast = document.getElementById('toast');
 let refreshTimer;
 let rendered = false;
+let renderController;
 
 const escapeHTML = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const short = (value, left = 12, right = 7) => value && value.length > left + right + 3 ? `${value.slice(0, left)}…${value.slice(-right)}` : value || '—';
@@ -52,21 +53,11 @@ function age(value) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-
-async function api(path) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store'});
-    const body = await response.json().catch(() => ({}));
-    if (response.status === 429 && attempt === 0) {
-      const retryAfter = Number(response.headers.get('Retry-After') || 1);
-      await wait(Math.max(1, Math.min(retryAfter, 3)) * 1000);
-      continue;
-    }
-    if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
-    return body;
-  }
-  throw new Error('request failed');
+async function api(path, signal) {
+  const response = await fetch(path, {headers: {'Accept': 'application/json'}, cache: 'no-store', signal});
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+  return body;
 }
 
 function notify(message) {
@@ -170,9 +161,9 @@ function connection(status) {
   </section>`;
 }
 
-async function overview() {
+async function overview(signal) {
   setNav('overview');
-  const [status, blocks] = await Promise.all([api('/api/status'), api('/api/blocks?limit=8&offset=0')]);
+  const [status, blocks] = await Promise.all([api('/api/status', signal), api('/api/blocks?limit=8&offset=0', signal)]);
   setLive(status);
   app.innerHTML = `<section class="overview-heading"><div><span class="kicker">PUBLIC QDAY PPLNS</span><h1>HASH. GET PAID.</h1><p>No accounts. Rewards go to your QDAY address.</p></div><div class="sync-state"><i class="sync-dot"></i> CHAIN ${status.network.synced ? 'VERIFIED' : 'SYNCING'} · BLOCK ${number(status.network.height)}</div></section>
     ${connection(status)}
@@ -189,32 +180,32 @@ async function overview() {
     <section class="card"><header class="card-header"><h2>Latest pool blocks</h2><a class="card-action route-link" href="/blocks">View all blocks →</a></header><div class="table-scroll"><table class="data-table blocks-table"><thead><tr><th>Height</th><th>Block</th><th>Found</th><th>Miner</th><th>Worker</th><th class="numeric">TX fees</th><th class="numeric">Miner credit</th><th class="numeric">Pool reserve</th><th>Status</th></tr></thead><tbody>${blockRows(blocks.blocks)}</tbody></table></div></section>`;
 }
 
-async function blocksPage(params) {
+async function blocksPage(params, signal) {
   setNav('blocks');
   const page = requestedPage(params); const limit = 20; const offset = (page - 1) * limit;
-  const [status, data] = await Promise.all([api('/api/status'), api(`/api/blocks?limit=${limit}&offset=${offset}`)]); setLive(status);
+  const [status, data] = await Promise.all([api('/api/status', signal), api(`/api/blocks?limit=${limit}&offset=${offset}`, signal)]); setLive(status);
   app.innerHTML = `<section class="page-heading"><div><span class="kicker">POOL HISTORY</span><h1>BLOCKS</h1><p>Every block found through this pool, its fees and its maturity state.</p></div><div class="sync-state"><i class="sync-dot"></i> BLOCK ${number(status.network.height)}</div></section>
     <section class="card"><div class="table-scroll"><table class="data-table blocks-table"><thead><tr><th>Height</th><th>Block</th><th>Found</th><th>Miner</th><th>Worker</th><th class="numeric">TX fees</th><th class="numeric">Miner credit</th><th class="numeric">Pool reserve</th><th>Status</th></tr></thead><tbody>${blockRows(data.blocks)}</tbody></table></div></section>${pagination('/blocks', data.total, data.limit, data.offset)}`;
 }
 
-async function minersPage() {
+async function minersPage(signal) {
   setNav('miners');
-  const [status, data] = await Promise.all([api('/api/status'), api('/api/miners?limit=100')]); setLive(status);
+  const [status, data] = await Promise.all([api('/api/status', signal), api('/api/miners?limit=100', signal)]); setLive(status);
   app.innerHTML = `<section class="page-heading"><div><span class="kicker">LAST TEN MINUTES</span><h1>MINERS</h1><p>Accepted work by payout address and worker label.</p></div><div class="sync-state"><i class="sync-dot"></i> ${number(status.pool.miners)} ACTIVE</div></section>
     <section class="card"><div class="table-scroll"><table class="data-table miners-table"><thead><tr><th>#</th><th>Address</th><th>Worker</th><th class="numeric">Hashrate</th><th class="numeric">Shares</th><th>Last share</th></tr></thead><tbody>${minerRows(data.miners)}</tbody></table></div></section>`;
 }
 
-async function payoutsPage(params) {
+async function payoutsPage(params, signal) {
   setNav('payouts');
   const page = requestedPage(params); const limit = 20; const offset = (page - 1) * limit;
-  const [status, data] = await Promise.all([api('/api/status'), api(`/api/payouts?limit=${limit}&offset=${offset}`)]); setLive(status);
+  const [status, data] = await Promise.all([api('/api/status', signal), api(`/api/payouts?limit=${limit}&offset=${offset}`, signal)]); setLive(status);
   app.innerHTML = `<section class="page-heading"><div><span class="kicker">IDEMPOTENT ON-CHAIN PAYMENTS</span><h1>PAYOUTS</h1><p>Mature PPLNS balances leave in exact atomic amounts.</p></div><div class="sync-state"><i class="sync-dot"></i> MINIMUM ${qday(status.policy.minimumPayout)}</div></section>
     <section class="card"><div class="table-scroll"><table class="data-table payouts-table"><thead><tr><th>Created</th><th>Status</th><th class="numeric">Amount</th><th class="numeric">Fee</th><th class="numeric">Outputs</th><th>Transaction</th></tr></thead><tbody>${payoutRows(data.payouts)}</tbody></table></div></section>${pagination('/payouts', data.total, data.limit, data.offset)}`;
 }
 
-async function accountPage(address) {
+async function accountPage(address, signal) {
   setNav('');
-  const [status, account] = await Promise.all([api('/api/status'), api(`/api/accounts/${encodeURIComponent(address)}`)]); setLive(status);
+  const [status, account] = await Promise.all([api('/api/status', signal), api(`/api/accounts/${encodeURIComponent(address)}`, signal)]); setLive(status);
   app.innerHTML = `<div class="breadcrumbs"><a class="route-link" href="/">Pool</a><span>›</span><span>Miner account</span></div>
     <section class="page-heading"><div><span class="kicker">PPLNS ACCOUNT</span><h1>MINER</h1><p>Credits are attached to the payout address in your Stratum username.</p></div></section>
     <section class="account-id"><span>QDAY PAYOUT ADDRESS</span><code>${escapeHTML(account.address)}</code></section>
@@ -223,17 +214,19 @@ async function accountPage(address) {
 
 async function render() {
   clearTimeout(refreshTimer);
+  renderController?.abort();
+  const controller = new AbortController();
+  renderController = controller;
   const focused = document.activeElement?.id || '';
   const lookupValue = document.getElementById('address-search')?.value || '';
   try {
     const url = new URL(location.href);
-    if (url.pathname === '/') await overview();
-    else if (url.pathname === '/blocks') await blocksPage(url.searchParams);
-    else if (url.pathname === '/miners') await minersPage();
-    else if (url.pathname === '/payouts') await payoutsPage(url.searchParams);
-    else if (url.pathname.startsWith('/account/')) await accountPage(decodeURIComponent(url.pathname.slice(9)));
-    else { history.replaceState({}, '', '/'); await overview(); }
-    bind();
+    if (url.pathname === '/') await overview(controller.signal);
+    else if (url.pathname === '/blocks') await blocksPage(url.searchParams, controller.signal);
+    else if (url.pathname === '/miners') await minersPage(controller.signal);
+    else if (url.pathname === '/payouts') await payoutsPage(url.searchParams, controller.signal);
+    else if (url.pathname.startsWith('/account/')) await accountPage(decodeURIComponent(url.pathname.slice(9)), controller.signal);
+    else { history.replaceState({}, '', '/'); await overview(controller.signal); }
 	if (lookupValue) {
 	  const input = document.getElementById('address-search');
 	  if (input) input.value = lookupValue;
@@ -242,6 +235,7 @@ async function render() {
     rendered = true;
     refreshTimer = setTimeout(render, document.hidden ? 30000 : 10000);
   } catch (error) {
+    if (error.name === 'AbortError') return;
     if (rendered) notify('Refresh delayed. Retrying…');
     else {
       setLive(null);
@@ -255,12 +249,28 @@ function navigate(href) {
   history.pushState({}, '', href); window.scrollTo({top: 0, behavior: 'instant'}); render();
 }
 
-function bind() {
-  document.querySelectorAll('a.route-link').forEach(link => link.addEventListener('click', event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); navigate(link.getAttribute('href')); } }));
-  document.querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', () => copy(button.dataset.copy)));
-  document.querySelectorAll('tr[data-href]').forEach(row => row.addEventListener('click', event => { if (!event.target.closest('a')) navigate(row.dataset.href); }));
-  document.getElementById('lookup-form')?.addEventListener('submit', event => { event.preventDefault(); const value = document.getElementById('address-search').value.trim(); if (value) navigate(`/account/${encodeURIComponent(value)}`); });
-}
+document.addEventListener('click', event => {
+  const route = event.target.closest('a.route-link');
+  if (route && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) {
+    event.preventDefault();
+    navigate(route.getAttribute('href'));
+    return;
+  }
+  const copyButton = event.target.closest('[data-copy]');
+  if (copyButton) {
+    copy(copyButton.dataset.copy);
+    return;
+  }
+  const row = event.target.closest('tr[data-href]');
+  if (row && !event.target.closest('a')) navigate(row.dataset.href);
+});
+
+document.addEventListener('submit', event => {
+  if (event.target.id !== 'lookup-form') return;
+  event.preventDefault();
+  const value = document.getElementById('address-search').value.trim();
+  if (value) navigate(`/account/${encodeURIComponent(value)}`);
+});
 
 window.addEventListener('popstate', render);
 render();

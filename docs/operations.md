@@ -81,9 +81,8 @@ pool.pqday.com {
 }
 ```
 
-The application limits each public API client to a burst of 60 requests and
-two new requests per second. Keep any additional reverse-proxy limit generous
-enough for the dashboard's five-second refresh.
+Keep any reverse-proxy request limits generous enough for the dashboard and
+public account lookups.
 
 ## Backups
 
