@@ -4,10 +4,11 @@
 
 ## POINT THE HASH HERE.
 
-A public, registration-free PPLNS pool for QDAY. The node supplies
-transaction-aware templates with every available fee. SiaMining hardware does
-the BLAKE2b-256 work. The pool counts exact work and pays the QDAY address used
-as the Stratum username.
+A public, registration-free PPLNS pool for QDAY. The node fills each template
+with valid mempool transactions up to the consensus block-weight limit and
+adds their fees to the payout. SiaMining hardware does the BLAKE2b-256 work.
+The pool counts exact work and pays the QDAY address used as the Stratum
+username.
 
 No account. No email. No balance trapped behind a withdrawal button.
 
@@ -27,9 +28,9 @@ share accounting, maturity, payouts and a public dashboard.
 
 ## Connect
 
-Public mining opens for block **9,100**. Before that candidate exists, the
-dashboard shows the activation height and Stratum returns a clear activation
-error. The pool never serves the legacy mining format.
+The SiaMining-compatible format begins at block **9,100**. Run qday-pool
+`v0.2.0` or newer with QDAY Node `v1.0.0` or newer. The pool never serves the
+legacy mining format.
 
 Use the receive address from your QDAY wallet as the username. Add `.worker`
 only when you want a name for that machine.
@@ -37,7 +38,8 @@ only when you want a name for that machine.
 ### GPU
 
 Download [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest),
-install the AMD or NVIDIA OpenCL driver, then replace `YOUR_QDAY_ADDRESS`:
+install the OpenCL driver supplied by the GPU vendor, then replace
+`YOUR_QDAY_ADDRESS`:
 
 ```sh
 qday-gominer \
@@ -56,9 +58,10 @@ Username: YOUR_QDAY_ADDRESS.asic1
 Password: x
 ```
 
-Some firmware wants `pool.pqday.com` and port `3333` in separate fields. The
-password is required by some firmware but ignored by the pool. The worker label
-may contain letters, numbers, `_` and `-`; it is optional.
+Some firmware wants `pool.pqday.com` and port `3333` in separate fields. Use
+`x` when it requires a password. Advanced miners may request a starting share
+difficulty with a password such as `d=0.01`; VarDiff adjusts it afterward. The
+worker label may contain letters, numbers, `_` and `-`; it is optional.
 
 The exact login, job and submission fields are documented in
 [Mining protocol](docs/protocol.md).
@@ -119,10 +122,9 @@ required for standard SiaMining hardware:
 - `pool/payout` signs an exact multi-recipient batch with a retry-safe request
   ID and persists it through restarts and reorganizations.
 
-The compact final marker becomes a consensus rule at block 9,100. The pool and
+The compact final marker is a consensus rule from block 9,100. The pool and
 QDAY gominer accept only that format. Genesis, P2P identity, balances and
-ordinary signed transactions stay unchanged. Older nodes must update before
-that block.
+ordinary signed transactions stay unchanged.
 
 ## Links
 

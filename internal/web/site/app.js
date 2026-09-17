@@ -188,7 +188,7 @@ function connection(status) {
       <article class="miner-setup">
         <div class="setup-title"><span>ASIC</span><strong>SIA HARDWARE</strong></div>
         <p>The mining software is already inside the device. Open its pool settings and enter:</p>
-        <dl class="asic-fields"><div><dt>URL</dt><dd>${stratum}</dd></div><div><dt>USERNAME</dt><dd>YOUR_QDAY_ADDRESS.asic1</dd></div><div><dt>PASSWORD</dt><dd>x <small>required by some firmware; ignored by the pool</small></dd></div></dl>
+        <dl class="asic-fields"><div><dt>URL</dt><dd>${stratum}</dd></div><div><dt>USERNAME</dt><dd>YOUR_QDAY_ADDRESS.asic1</dd></div><div><dt>PASSWORD</dt><dd>x <small>or d=0.01 to request a starting difficulty</small></dd></div></dl>
       </article>
     </div>
   </section>`;
@@ -206,7 +206,7 @@ async function overview(signal) {
       <div class="metric"><span>Active miners</span><strong>${number(status.pool.miners)}</strong><small>${number(status.pool.workers)} active workers · ${number(status.pool.connected)} authorized sessions</small></div>
       <div class="metric"><span>Round effort</span><strong>${percent(status.pool.roundEffort)}</strong><small>expected work since last pool block</small></div>
       <div class="metric"><span>Pool blocks</span><strong>${number(status.pool.blocks)}</strong><small>${status.lastBlock ? `last at height ${number(status.lastBlock.height)}` : 'waiting for the first one'}</small></div>
-      <div class="metric"><span>Next block template</span><strong>${number(status.network.templateTransactions)} TX</strong><small>${number(status.network.mempoolTransactions)} waiting in mempool · block weight limited</small></div>
+      <div class="metric"><span>Selected for next block</span><strong>${number(status.network.templateTransactions)} TX</strong><small>${number(status.network.mempoolTransactions)} waiting in mempool · size limited</small></div>
     </section>
     <section class="lookup"><label for="address-search">MINER ACCOUNT</label><form class="lookup-row" id="lookup-form"><input id="address-search" autocomplete="off" spellcheck="false" placeholder="Enter a QDAY payout address"><button>LOOK UP</button></form></section>
     <section class="card policy-card"><header class="card-header"><h2>Pool policy</h2><span class="card-meta">EXACT ATOMIC ACCOUNTING</span></header><ul class="policy-list"><li><span>Method</span><strong>${escapeHTML(status.policy.method)} ${number(status.policy.window)}N</strong></li><li><span>Pool reserve</span><strong>${status.policy.feePercent}%</strong></li><li><span>Reward maturity</span><strong>${number(status.policy.maturityBlocks)} BLOCKS</strong></li><li><span>Minimum payout</span><strong>${qday(status.policy.minimumPayout)}</strong></li><li><span>Batch tx fee from reserve</span><strong>${qday(status.policy.payoutFee)}</strong></li></ul></section>
