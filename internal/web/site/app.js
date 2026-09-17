@@ -182,7 +182,7 @@ function connection(status) {
       <article class="miner-setup">
         <div class="setup-title"><span>GPU</span><strong>QDAY-GOMINER</strong></div>
         <p>Install the AMD/NVIDIA OpenCL driver, download <b>qday-gominer</b>, replace <b>YOUR_QDAY_ADDRESS</b>, then run:</p>
-        <div class="miner-downloads"><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/qday-gominer-1.0.0-linux-amd64.tar.gz" target="_blank" rel="noreferrer">LINUX X86-64 ↓</a><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/qday-gominer-1.0.0-linux-arm64.tar.gz" target="_blank" rel="noreferrer">LINUX ARM64 ↓</a><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/SHA256SUMS" target="_blank" rel="noreferrer">SHA-256 ↓</a></div>
+        <div class="miner-downloads"><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/qday-gominer-1.0.0-windows-amd64.zip" target="_blank" rel="noreferrer">WINDOWS X86-64 ↓</a><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/qday-gominer-1.0.0-linux-amd64.tar.gz" target="_blank" rel="noreferrer">LINUX X86-64 ↓</a><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/qday-gominer-1.0.0-linux-arm64.tar.gz" target="_blank" rel="noreferrer">LINUX ARM64 ↓</a><a href="https://github.com/petoshi/qday-gominer/releases/download/v1.0.0/SHA256SUMS" target="_blank" rel="noreferrer">SHA-256 ↓</a></div>
         <code class="command">qday-gominer -url ${stratum} -user YOUR_QDAY_ADDRESS.gpu1</code>
       </article>
       <article class="miner-setup">

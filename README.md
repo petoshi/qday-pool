@@ -37,9 +37,9 @@ only when you want a name for that machine.
 
 ### GPU
 
-Download [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest),
-install the OpenCL driver supplied by the GPU vendor, then replace
-`YOUR_QDAY_ADDRESS`:
+Download [QDAY gominer](https://github.com/petoshi/qday-gominer/releases/latest)
+for Windows x86-64, Linux x86-64 or Linux ARM64. Install the OpenCL driver
+supplied by the GPU vendor, then replace `YOUR_QDAY_ADDRESS`:
 
 ```sh
 qday-gominer \
