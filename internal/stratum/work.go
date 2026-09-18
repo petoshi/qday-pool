@@ -205,10 +205,12 @@ func newWorkTemplate(template nodeapi.Template) (*workTemplate, error) {
 }
 
 func (t *workTemplate) newJob(id string, sequence uint64, owner *client, timestamp time.Time, difficulty float64) (*job, error) {
-	when := uint64(timestamp.Unix())
-	if when < uint64(t.timestamp) {
-		when = uint64(t.timestamp)
+	unixTime := timestamp.Unix()
+	if unixTime < t.timestamp {
+		unixTime = t.timestamp
 	}
+	when := uint64(unixTime)
+	when = owner.jobTimestamp(when)
 	var shareTarget [32]byte
 	if difficulty >= t.networkDiff {
 		// A share target must never be harder than the block target. Otherwise

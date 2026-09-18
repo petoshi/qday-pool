@@ -327,19 +327,23 @@ func TestWorkerAndTimestampValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &client{address: keys.Public.String(), worker: "rig", difficulty: 1e-12}
-	job, err := template.newJob("job", 1, owner, time.Now(), 1e-12)
+	now := time.Now()
+	job, err := template.newJob("job", 1, owner, now, 1e-12)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, _, _, err := job.solve("00000000", littleEndianHex(job.timestamp+1), "0000000000000000"); err == nil {
 		t.Fatal("accepted timestamp outside the assigned job")
 	}
-	harder, err := template.newJob("harder", 2, owner, time.Now(), 1e12)
+	harder, err := template.newJob("harder", 2, owner, now, 1e12)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if harder.shareTarget != target || harder.difficulty != template.networkDiff {
 		t.Fatal("share target became harder than the network block target")
+	}
+	if harder.timestamp != job.timestamp+1 {
+		t.Fatalf("second job timestamp %d, want %d", harder.timestamp, job.timestamp+1)
 	}
 }
 

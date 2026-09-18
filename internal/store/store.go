@@ -16,6 +16,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+var ErrDuplicateShare = errors.New("duplicate share")
+
 const schema = `
 PRAGMA journal_mode=WAL;
 PRAGMA synchronous=FULL;
@@ -197,10 +199,15 @@ func (s *Store) RecordShare(share Share) (int64, error) {
 	if share.CreatedAt.IsZero() || share.Height == 0 || share.Address == "" || share.Work == nil || share.Work.Sign() <= 0 || share.Hash == "" {
 		return 0, errors.New("incomplete accepted share")
 	}
-	result, err := s.db.Exec(`INSERT INTO shares(created_at,height,parent_id,job_id,address,worker,difficulty,work,hash) VALUES(?,?,?,?,?,?,?,?,?)`,
+	result, err := s.db.Exec(`INSERT INTO shares(created_at,height,parent_id,job_id,address,worker,difficulty,work,hash) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(hash) DO NOTHING`,
 		share.CreatedAt.UnixMilli(), share.Height, share.ParentID, share.JobID, share.Address, share.Worker, share.Difficulty, share.Work.String(), share.Hash)
 	if err != nil {
 		return 0, err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return 0, err
+	} else if affected == 0 {
+		return 0, ErrDuplicateShare
 	}
 	return result.LastInsertId()
 }

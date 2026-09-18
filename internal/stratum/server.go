@@ -495,6 +495,7 @@ type client struct {
 	difficulty float64
 	lastDiff   float64
 	lastJob    uint64
+	lastTime   uint64
 	shareTimes []time.Time
 	lastShare  time.Time
 	extraNonce [4]byte
@@ -696,6 +697,16 @@ func (c *client) identity() (string, string) {
 	return c.address, c.worker
 }
 
+func (c *client) jobTimestamp(candidate uint64) uint64 {
+	c.state.Lock()
+	defer c.state.Unlock()
+	if candidate <= c.lastTime {
+		candidate = c.lastTime + 1
+	}
+	c.lastTime = candidate
+	return candidate
+}
+
 func (c *client) setTemplate(template *workTemplate) {
 	c.state.Lock()
 	c.template = template
@@ -833,6 +844,10 @@ func (c *client) submit(ctx context.Context, request rpcRequest) {
 	shareID, err := c.server.store.RecordShare(store.Share{CreatedAt: now, Height: j.height, ParentID: hex.EncodeToString(j.parent[:]), JobID: j.id, Address: address, Worker: worker, Difficulty: j.difficulty, Work: TargetWork(j.shareTarget), Hash: hex.EncodeToString(hash[:])})
 	if err != nil {
 		c.server.rejectedShares.Add(1)
+		if errors.Is(err, store.ErrDuplicateShare) {
+			c.respond(request.ID, false, rpcFailure(22, "duplicate share"))
+			return
+		}
 		c.server.cfg.Logger.Error("accepted share could not be stored", "worker", worker, "error", err)
 		c.respond(request.ID, false, rpcFailure(20, "pool accounting unavailable"))
 		return

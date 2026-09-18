@@ -62,3 +62,15 @@ func TestDashboardAndReadOnlyAPI(t *testing.T) {
 		t.Fatalf("write method returned %d", response.Code)
 	}
 }
+
+func TestObservedNetworkHashrate(t *testing.T) {
+	now := time.Now().UTC()
+	blocks := []store.FoundBlock{
+		{Height: 110, FoundAt: now, WindowWork: "120000", Canonical: true},
+		{Height: 100, FoundAt: now.Add(-time.Minute), WindowWork: "120000", Canonical: true},
+	}
+	hashrate, window := observedNetworkHashrate(blocks, 2)
+	if hashrate != 10_000 || window != 10 {
+		t.Fatalf("got %.0f H/s over %d blocks", hashrate, window)
+	}
+}

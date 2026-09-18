@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"math/big"
 	"path/filepath"
 	"testing"
@@ -15,6 +16,22 @@ func openTestStore(t *testing.T) *Store {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	return s
+}
+
+func TestDuplicateShare(t *testing.T) {
+	s := openTestStore(t)
+	share := Share{CreatedAt: time.Now().UTC(), Height: 1, ParentID: "parent", JobID: "job", Address: "address", Worker: "worker", Difficulty: 1, Work: big.NewInt(10), Hash: "same-hash"}
+	if _, err := s.RecordShare(share); err != nil {
+		t.Fatal(err)
+	}
+	share.JobID = "another-job"
+	if _, err := s.RecordShare(share); !errors.Is(err, ErrDuplicateShare) {
+		t.Fatalf("got %v, want duplicate share", err)
+	}
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM shares`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("stored %d copies: %v", count, err)
+	}
 }
 
 func TestPPLNSAllocationAndPayoutAccounting(t *testing.T) {
