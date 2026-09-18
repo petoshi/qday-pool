@@ -52,7 +52,12 @@ parentID[32] || nonceLE64 || timestampLE64 || commitment[32]
 
 Hash it with BLAKE2b-256. The pool verifies every share against the exact share
 target and verifies winning hashes again against QDAY's exact network target.
-VarDiff aims for one accepted share every 15 seconds per connection.
+VarDiff aims for one accepted share every 15 seconds per connection. Normal
+retargeting measures a 90 second window and limits each adjustment to half or
+double the previous difficulty. A sustained startup burst can rise fourfold so
+ASICs leave the low initial difficulty quickly. An idle connection steps down
+gradually. A single lucky or delayed share cannot send difficulty across the
+full range.
 
 The compact transaction is 23 fixed bytes, the four-byte pool extranonce, the
 four-byte miner extranonce and two fixed trailing bytes. It is exactly 33 bytes

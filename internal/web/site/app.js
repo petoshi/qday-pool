@@ -202,7 +202,7 @@ async function overview(signal) {
     ${connection(status)}
     <section class="metric-grid">
       <div class="metric accent"><span>Pool hashrate</span><strong>${hashrate(status.pool.hashrate)}</strong><small>accepted work · 10 minute window</small></div>
-      <div class="metric"><span>Network hashrate</span><strong>${hashrate(status.network.observedHashrate || status.network.hashrate)}</strong><small>${status.network.observedHashrate ? `${number(status.network.hashrateWindowBlocks)} blocks observed · target rate ${hashrate(status.network.hashrate)}` : `BLAKE2b-256 · difficulty ${difficulty(status.network.difficulty)}`}</small></div>
+      <div class="metric"><span>Network hashrate</span><strong>${hashrate(status.network.observedHashrate || status.network.hashrate)}</strong></div>
       <div class="metric"><span>Active miners</span><strong>${number(status.pool.miners)}</strong><small>${number(status.pool.workers)} active workers · ${number(status.pool.connected)} authorized sessions</small></div>
       <div class="metric"><span>Round effort</span><strong>${percent(status.pool.roundEffort)}</strong><small>expected work since last pool block</small></div>
       <div class="metric"><span>Pool blocks</span><strong>${number(status.pool.blocks)}</strong><small>${status.lastBlock ? `last at height ${number(status.lastBlock.height)}` : 'waiting for the first one'}</small></div>

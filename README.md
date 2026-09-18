@@ -77,7 +77,7 @@ The exact login, job and submission fields are documented in
   prepared.
 - **Payout fee:** paid from the pool reserve, never removed from a displayed
   miner balance.
-- **Share difficulty:** VarDiff targets one share every 15 seconds per worker.
+- **Share difficulty:** VarDiff targets one share every 15 seconds per worker using stable 90 second retarget windows and bounded adjustments.
 
 Every amount is stored as an atomic integer. When PQ Day changes the displayed
 unit, the accounting does not guess, round or reinterpret old balances.

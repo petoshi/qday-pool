@@ -37,6 +37,13 @@ const (
 	templateWorkers    = 16
 	defaultJobInterval = 30 * time.Second
 	minerWriteTimeout  = 60 * time.Second
+	vardiffInterval    = 90 * time.Second
+	vardiffFastWindow  = 5 * time.Second
+	vardiffFastShares  = 3
+	vardiffMinFactor   = .5
+	vardiffMaxFactor   = 2
+	vardiffFastFactor  = 4
+	vardiffMinChange   = .15
 )
 
 type nodeClient interface {
@@ -487,18 +494,20 @@ type client struct {
 	state  sync.Mutex
 	once   sync.Once
 
-	subscribed atomic.Bool
-	authorized atomic.Bool
-	address    string
-	worker     string
-	template   *workTemplate
-	difficulty float64
-	lastDiff   float64
-	lastJob    uint64
-	lastTime   uint64
-	shareTimes []time.Time
-	lastShare  time.Time
-	extraNonce [4]byte
+	subscribed        atomic.Bool
+	authorized        atomic.Bool
+	address           string
+	worker            string
+	template          *workTemplate
+	difficulty        float64
+	lastDiff          float64
+	lastJob           uint64
+	lastTime          uint64
+	vardiffStarted    time.Time
+	vardiffDifficulty float64
+	vardiffShares     uint64
+	lastShare         time.Time
+	extraNonce        [4]byte
 
 	submitMu sync.Mutex
 	submits  map[string]struct{}
@@ -634,7 +643,7 @@ func (c *client) handle(ctx context.Context, request rpcRequest) {
 		c.state.Lock()
 		c.address, c.worker = address, worker
 		c.difficulty, c.template = difficulty, nil
-		c.shareTimes, c.lastShare = nil, time.Time{}
+		c.vardiffStarted, c.vardiffDifficulty, c.vardiffShares, c.lastShare = time.Time{}, 0, 0, time.Time{}
 		c.state.Unlock()
 		c.authorized.Store(true)
 		_ = c.conn.SetReadDeadline(time.Time{})
@@ -657,7 +666,8 @@ func (c *client) handle(ctx context.Context, request rpcRequest) {
 			return
 		}
 		c.state.Lock()
-		c.difficulty, c.shareTimes = params[0], nil
+		c.difficulty = params[0]
+		c.vardiffStarted, c.vardiffDifficulty, c.vardiffShares = time.Time{}, 0, 0
 		c.state.Unlock()
 		c.respond(request.ID, true, nil)
 		if c.authorized.Load() {
@@ -768,24 +778,54 @@ func (c *client) sendJob(j *job, clean bool) error {
 	return c.notify("mining.notify", j.notifyParams(clean))
 }
 
-func (c *client) acceptedAt(now time.Time) bool {
+func sameDifficulty(a, b float64) bool {
+	if a == b {
+		return true
+	}
+	return math.Abs(a-b) <= math.Max(math.Abs(a), math.Abs(b))*1e-9
+}
+
+func (c *client) resetVardiff(now time.Time, difficulty float64) {
+	c.vardiffStarted = now
+	c.vardiffDifficulty = difficulty
+	c.vardiffShares = 0
+}
+
+func (c *client) acceptedAt(now time.Time, shareDifficulty float64) bool {
 	c.state.Lock()
 	defer c.state.Unlock()
 	c.lastShare = now
-	c.shareTimes = append(c.shareTimes, now)
-	if len(c.shareTimes) < 2 {
+	// A clean difficulty notification can race with a final share from the
+	// preceding job. Credit that share, but do not let it contaminate the new
+	// VarDiff window.
+	if !sameDifficulty(shareDifficulty, c.lastDiff) {
 		return false
 	}
-	span := c.shareTimes[len(c.shareTimes)-1].Sub(c.shareTimes[0])
-	if span <= 0 {
-		span = time.Millisecond
+	if c.vardiffStarted.IsZero() || !sameDifficulty(c.vardiffDifficulty, shareDifficulty) {
+		c.difficulty = shareDifficulty
+		c.resetVardiff(now, shareDifficulty)
+		return false
 	}
-	observed := span.Seconds() / float64(len(c.shareTimes)-1)
-	factor := c.server.cfg.ShareTarget.Seconds() / observed
-	factor = math.Max(.25, math.Min(64, factor))
-	next := math.Max(c.server.cfg.MinimumDifficulty, math.Min(c.server.cfg.MaximumDifficulty, c.difficulty*factor))
-	c.shareTimes = c.shareTimes[len(c.shareTimes)-1:]
-	if math.Abs(next/c.difficulty-1) < .15 {
+	c.vardiffShares++
+	elapsed := now.Sub(c.vardiffStarted)
+	fast := c.vardiffShares >= vardiffFastShares && elapsed > 0 && elapsed <= vardiffFastWindow
+	if elapsed < vardiffInterval && !fast {
+		return false
+	}
+	if elapsed <= 0 {
+		elapsed = time.Millisecond
+	}
+	factor := float64(c.vardiffShares) * c.server.cfg.ShareTarget.Seconds() / elapsed.Seconds()
+	maximum := float64(vardiffMaxFactor)
+	if fast {
+		maximum = vardiffFastFactor
+	}
+	factor = math.Max(vardiffMinFactor, math.Min(maximum, factor))
+	next := math.Max(c.server.cfg.MinimumDifficulty, math.Min(c.server.cfg.MaximumDifficulty, c.vardiffDifficulty*factor))
+	previous := c.difficulty
+	c.resetVardiff(now, next)
+	if math.Abs(next/previous-1) < vardiffMinChange {
+		c.vardiffDifficulty = previous
 		return false
 	}
 	c.difficulty = next
@@ -800,6 +840,7 @@ func (c *client) lowerIdleDifficulty(now time.Time) {
 	}
 	c.difficulty = math.Max(c.server.cfg.MinimumDifficulty, c.difficulty/2)
 	c.lastShare = now
+	c.vardiffStarted, c.vardiffDifficulty, c.vardiffShares = time.Time{}, 0, 0
 }
 
 func (c *client) submit(ctx context.Context, request rpcRequest) {
@@ -853,7 +894,7 @@ func (c *client) submit(ctx context.Context, request rpcRequest) {
 		return
 	}
 	c.server.acceptedShares.Add(1)
-	retarget := c.acceptedAt(now)
+	retarget := c.acceptedAt(now, j.difficulty)
 	if !network {
 		c.respond(request.ID, true, nil)
 		if retarget {

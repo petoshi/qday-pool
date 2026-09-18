@@ -347,6 +347,94 @@ func TestWorkerAndTimestampValidation(t *testing.T) {
 	}
 }
 
+func testVardiffClient(difficulty float64) *client {
+	return &client{
+		server: &Server{cfg: Config{
+			ShareTarget:       15 * time.Second,
+			MinimumDifficulty: .01,
+			MaximumDifficulty: 1e12,
+		}},
+		difficulty: difficulty,
+		lastDiff:   difficulty,
+	}
+}
+
+func TestVarDiffUsesStableWindows(t *testing.T) {
+	t.Run("target rate stays unchanged", func(t *testing.T) {
+		c := testVardiffClient(100)
+		start := time.Unix(1_000, 0)
+		if c.acceptedAt(start, 100) {
+			t.Fatal("first share changed difficulty")
+		}
+		for i := 1; i <= 6; i++ {
+			if c.acceptedAt(start.Add(time.Duration(i)*15*time.Second), 100) {
+				t.Fatalf("target-rate share %d changed difficulty", i)
+			}
+		}
+		if c.difficulty != 100 {
+			t.Fatalf("difficulty %v, want 100", c.difficulty)
+		}
+	})
+
+	t.Run("one fast pair does not spike difficulty", func(t *testing.T) {
+		c := testVardiffClient(100)
+		start := time.Unix(2_000, 0)
+		c.acceptedAt(start, 100)
+		if c.acceptedAt(start.Add(time.Second), 100) || c.difficulty != 100 {
+			t.Fatalf("difficulty changed after one fast pair: %v", c.difficulty)
+		}
+	})
+
+	t.Run("sustained fast shares use bounded startup", func(t *testing.T) {
+		c := testVardiffClient(100)
+		start := time.Unix(3_000, 0)
+		c.acceptedAt(start, 100)
+		changed := false
+		for i := 1; i <= vardiffFastShares; i++ {
+			changed = c.acceptedAt(start.Add(time.Duration(i)*time.Second), 100)
+		}
+		if !changed || c.difficulty != 400 {
+			t.Fatalf("fast-start difficulty %v changed=%v, want 400 and true", c.difficulty, changed)
+		}
+	})
+
+	t.Run("slow window can only halve difficulty", func(t *testing.T) {
+		c := testVardiffClient(100)
+		start := time.Unix(4_000, 0)
+		c.acceptedAt(start, 100)
+		if !c.acceptedAt(start.Add(2*time.Minute), 100) || c.difficulty != 50 {
+			t.Fatalf("slow-window difficulty %v, want 50", c.difficulty)
+		}
+	})
+
+	t.Run("old job share is excluded", func(t *testing.T) {
+		c := testVardiffClient(200)
+		c.lastDiff = 200
+		start := time.Unix(5_000, 0)
+		if c.acceptedAt(start, 100) || !c.vardiffStarted.IsZero() || c.difficulty != 200 {
+			t.Fatalf("old job changed VarDiff state: difficulty=%v started=%v", c.difficulty, c.vardiffStarted)
+		}
+	})
+}
+
+func TestVarDiffLowersIdleDifficultyGradually(t *testing.T) {
+	c := testVardiffClient(100)
+	start := time.Unix(6_000, 0)
+	c.acceptedAt(start, 100)
+	c.lowerIdleDifficulty(start.Add(59 * time.Second))
+	if c.difficulty != 100 {
+		t.Fatalf("difficulty changed before idle threshold: %v", c.difficulty)
+	}
+	c.lowerIdleDifficulty(start.Add(60 * time.Second))
+	if c.difficulty != 50 || !c.vardiffStarted.IsZero() {
+		t.Fatalf("first idle reduction: difficulty=%v started=%v", c.difficulty, c.vardiffStarted)
+	}
+	c.lowerIdleDifficulty(start.Add(120 * time.Second))
+	if c.difficulty != 25 {
+		t.Fatalf("second idle reduction: difficulty=%v, want 25", c.difficulty)
+	}
+}
+
 func TestCompactWorkReconstructsFullBlock(t *testing.T) {
 	var target [32]byte
 	for i := range target {
