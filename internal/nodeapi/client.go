@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -117,12 +119,22 @@ func New(baseURL, token string) (*Client, error) {
 		return nil, errors.New("QDAY API token is empty")
 	}
 	return &Client{baseURL: baseURL, token: token, http: &http.Client{Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		MaxIdleConns:          16,
-		MaxIdleConnsPerHost:   16,
-		IdleConnTimeout:       90 * time.Second,
+		Proxy:               http.ProxyFromEnvironment,
+		MaxIdleConns:        16,
+		MaxIdleConnsPerHost: 16,
+		// QDAY's local HTTP server expires idle connections after 60 seconds.
+		// Retire them here first so a template request never races that close.
+		IdleConnTimeout:       45 * time.Second,
 		ResponseHeaderTimeout: 45 * time.Second,
 	}}}, nil
+}
+
+func transientTransportError(err error) bool {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	var networkError net.Error
+	return errors.As(err, &networkError)
 }
 
 func (c *Client) request(ctx context.Context, method, path string, body any, result any) error {
@@ -169,12 +181,20 @@ func (c *Client) request(ctx context.Context, method, path string, body any, res
 }
 
 func (c *Client) GetBlockTemplate(ctx context.Context, longPollID string, workNonce *uint64) (Template, error) {
-	var result Template
-	err := c.request(ctx, http.MethodPost, "/api/miner/getblocktemplate", struct {
+	request := struct {
 		LongPollID string  `json:"longpollid,omitempty"`
 		WorkNonce  *uint64 `json:"worknonce,omitempty"`
-	}{longPollID, workNonce}, &result)
-	return result, err
+	}{longPollID, workNonce}
+	for attempt := 0; ; attempt++ {
+		var result Template
+		err := c.request(ctx, http.MethodPost, "/api/miner/getblocktemplate", request, &result)
+		if err == nil || attempt == 1 || ctx.Err() != nil || !transientTransportError(err) {
+			return result, err
+		}
+		// Getting a template is read-only. Retrying it once is safe and avoids
+		// leaving a worker on old work after a stale loopback connection closes.
+		c.http.CloseIdleConnections()
+	}
 }
 
 func (c *Client) SubmitBlock(ctx context.Context, block string) (string, error) {

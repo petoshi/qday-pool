@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -79,5 +80,55 @@ func TestNodeError(t *testing.T) {
 	client, _ := New(server.URL, "token")
 	if _, err := client.Status(context.Background()); err == nil || err.Error() != "wallet is locked" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTemplateRetriesTransientTransportFailure(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			connection, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Errorf("hijack first request: %v", err)
+				return
+			}
+			_ = connection.Close()
+			return
+		}
+		_ = json.NewEncoder(w).Encode(Template{LongPollID: "recovered", Height: 42})
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	template, err := client.GetBlockTemplate(context.Background(), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	} else if template.LongPollID != "recovered" || template.Height != 42 {
+		t.Fatalf("wrong recovered template: %+v", template)
+	} else if requests.Load() != 2 {
+		t.Fatalf("template requests = %d, want 2", requests.Load())
+	}
+}
+
+func TestTemplateDoesNotRetryNodeError(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "template rejected"})
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.GetBlockTemplate(context.Background(), "", nil); err == nil || err.Error() != "template rejected" {
+		t.Fatalf("unexpected template error: %v", err)
+	} else if requests.Load() != 1 {
+		t.Fatalf("template requests = %d, want 1", requests.Load())
 	}
 }

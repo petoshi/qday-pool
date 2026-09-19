@@ -169,18 +169,6 @@ main { width: 100%; max-width: 1540px; min-height: calc(100vh - 260px); margin: 
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 30; max-width: min(390px, calc(100vw - 44px)); padding: 11px 15px; transform: translateY(20px); border: 1px solid #595b64; border-radius: 3px; background: #24252b; box-shadow: 0 14px 35px rgba(0,0,0,.3); color: #eee; font-size: 11px; opacity: 0; pointer-events: none; transition: .18s; }
 .toast.show { transform: translateY(0); opacity: 1; }
 
-body.upgrade-notice-open { overflow: hidden; }
-.upgrade-notice { position: fixed; z-index: 120; inset: 0; display: grid; padding: 20px; place-items: center; background: rgba(7, 8, 11, .84); backdrop-filter: blur(11px); }
-.upgrade-notice[hidden] { display: none; }
-.upgrade-notice-card { position: relative; width: min(590px, 100%); padding: clamp(30px, 6vw, 58px); border: 1px solid #674f3f; background: linear-gradient(145deg, #1b1b20, #101115 72%); box-shadow: 0 35px 90px rgba(0,0,0,.62), inset 4px 0 0 var(--accent); }
-.upgrade-notice-close { position: absolute; top: 14px; right: 14px; width: 43px; height: 43px; border: 1px solid #3d3e46; border-radius: 3px; background: transparent; color: #9b9aa3; font-size: 25px; line-height: 1; cursor: pointer; }
-.upgrade-notice-close:hover { border-color: var(--accent); color: #fff; }
-.upgrade-notice-kicker { color: #df9a78; font: 800 10px/1 var(--mono); letter-spacing: .16em; }
-.upgrade-notice-card h2 { max-width: 500px; margin: 16px 0 14px; color: #f5efe7; font: 800 clamp(44px, 9vw, 72px)/.88 Barlow, sans-serif; letter-spacing: -.015em; }
-.upgrade-notice-card p { max-width: 470px; margin: 0 0 27px; color: #aaa8af; font-size: 14px; line-height: 1.65; }
-.upgrade-notice-card a { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; gap: 14px; padding: 10px 15px; border: 1px solid var(--accent); border-radius: 3px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .07em; }
-.upgrade-notice-card a:hover { background: #f07855; }
-
 .activation-gate { position: fixed; z-index: 100; inset: 0; display: grid; padding: 22px; place-items: center; background: rgba(7, 8, 11, .82); backdrop-filter: blur(12px); }
 .activation-gate[hidden] { display: none; }
 .activation-dialog { width: min(620px, 100%); padding: clamp(28px, 5vw, 54px); border: 1px solid #604c3c; background: #17181d; box-shadow: 0 30px 90px rgba(0, 0, 0, .55); }
