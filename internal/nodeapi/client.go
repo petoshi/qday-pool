@@ -62,20 +62,22 @@ type BlockStatus struct {
 }
 
 type Status struct {
-	Network      string `json:"network"`
-	Height       uint64 `json:"height"`
-	Synced       bool   `json:"synced"`
-	Unlocked     bool   `json:"unlocked"`
-	HasWallet    bool   `json:"hasWallet"`
-	Address      string `json:"address"`
-	Unit         string `json:"unit"`
-	Balance      string `json:"balance"`
-	Immature     string `json:"immature"`
-	Pending      string `json:"pending"`
-	BalanceReady bool   `json:"balanceReady"`
-	Peers        int    `json:"peers"`
-	Mempool      int    `json:"mempoolTransactions"`
-	Qday         bool   `json:"qday"`
+	Network              string  `json:"network"`
+	Height               uint64  `json:"height"`
+	Synced               bool    `json:"synced"`
+	Unlocked             bool    `json:"unlocked"`
+	HasWallet            bool    `json:"hasWallet"`
+	Address              string  `json:"address"`
+	Unit                 string  `json:"unit"`
+	Balance              string  `json:"balance"`
+	Immature             string  `json:"immature"`
+	Pending              string  `json:"pending"`
+	BalanceReady         bool    `json:"balanceReady"`
+	Peers                int     `json:"peers"`
+	Mempool              int     `json:"mempoolTransactions"`
+	Qday                 bool    `json:"qday"`
+	ObservedHashrate     float64 `json:"observedHashrate"`
+	HashrateWindowBlocks uint64  `json:"hashrateWindowBlocks"`
 }
 
 type PayoutOutput struct {

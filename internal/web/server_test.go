@@ -30,7 +30,7 @@ func TestDashboardAndReadOnlyAPI(t *testing.T) {
 	}
 	defer database.Close()
 	mining := staticMining{stratum.Snapshot{Ready: true, MiningActive: true, Height: stratum.ActivationHeight, NetworkHashrate: 1e12, NetworkDifficulty: 2, NetworkWork: "60000000000000", Transactions: 3, Connected: 9, Authorized: 2, UpdatedAt: time.Now()}}
-	controller := staticController{pool.Snapshot{Node: nodeapi.Status{Network: "qday-mainnet", Height: stratum.ActivationHeight, Synced: true, Unit: "1000000", Peers: 4, Mempool: 9}, MinimumPayout: "1000000", PayoutFee: "1000"}}
+	controller := staticController{pool.Snapshot{Node: nodeapi.Status{Network: "qday-mainnet", Height: stratum.ActivationHeight, Synced: true, Unit: "1000000", Peers: 4, Mempool: 9, ObservedHashrate: 12_345, HashrateWindowBlocks: 60}, MinimumPayout: "1000000", PayoutFee: "1000"}}
 	server, err := New(database, mining, controller, Config{StratumAddress: "stratum+tcp://pool.pqday.com:3333", PoolFeeBPS: 100, PPLNSWindow: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestDashboardAndReadOnlyAPI(t *testing.T) {
 		t.Fatalf("status HTTP %d: %s", response.Code, response.Body.String())
 	}
 	var status Status
-	if err := json.Unmarshal(response.Body.Bytes(), &status); err != nil || !status.Ready || !status.Network.MiningActive || status.Network.ActivationHeight != stratum.ActivationHeight || status.Pool.Connected != 2 || status.Policy.FeePercent != 1 || status.Network.Transactions != 3 || status.Network.Mempool != 9 {
+	if err := json.Unmarshal(response.Body.Bytes(), &status); err != nil || !status.Ready || !status.Network.MiningActive || status.Network.ActivationHeight != stratum.ActivationHeight || status.Pool.Connected != 2 || status.Policy.FeePercent != 1 || status.Network.Transactions != 3 || status.Network.Mempool != 9 || status.Network.ObservedHashrate != 12_345 || status.Network.HashrateWindowBlocks != 60 {
 		t.Fatalf("wrong status: %+v, %v", status, err)
 	}
 
@@ -60,17 +60,5 @@ func TestDashboardAndReadOnlyAPI(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("write method returned %d", response.Code)
-	}
-}
-
-func TestObservedNetworkHashrate(t *testing.T) {
-	now := time.Now().UTC()
-	blocks := []store.FoundBlock{
-		{Height: 110, FoundAt: now, WindowWork: "120000", Canonical: true},
-		{Height: 100, FoundAt: now.Add(-time.Minute), WindowWork: "120000", Canonical: true},
-	}
-	hashrate, window := observedNetworkHashrate(blocks, 2)
-	if hashrate != 10_000 || window != 10 {
-		t.Fatalf("got %.0f H/s over %d blocks", hashrate, window)
 	}
 }

@@ -174,47 +174,6 @@ func floatFromBig(value *big.Int) float64 {
 	return result
 }
 
-func observedNetworkHashrate(blocks []store.FoundBlock, pplnsWindow uint64) (float64, uint64) {
-	if pplnsWindow == 0 {
-		return 0, 0
-	}
-	canonical := make([]store.FoundBlock, 0, len(blocks))
-	for _, block := range blocks {
-		if block.Canonical {
-			canonical = append(canonical, block)
-		}
-	}
-	if len(canonical) < 2 {
-		return 0, 0
-	}
-	totalWork := new(big.Int)
-	var heightSpan uint64
-	newest, oldest := canonical[0], canonical[0]
-	for i := 0; i+1 < len(canonical); i++ {
-		newer, older := canonical[i], canonical[i+1]
-		if newer.Height <= older.Height || !newer.FoundAt.After(older.FoundAt) {
-			continue
-		}
-		newerWindow, newerOK := new(big.Int).SetString(newer.WindowWork, 10)
-		olderWindow, olderOK := new(big.Int).SetString(older.WindowWork, 10)
-		if !newerOK || !olderOK || newerWindow.Sign() <= 0 || olderWindow.Sign() <= 0 {
-			continue
-		}
-		averageWork := new(big.Int).Add(newerWindow, olderWindow)
-		averageWork.Quo(averageWork, new(big.Int).SetUint64(2*pplnsWindow))
-		delta := newer.Height - older.Height
-		totalWork.Add(totalWork, averageWork.Mul(averageWork, new(big.Int).SetUint64(delta)))
-		heightSpan += delta
-		oldest = older
-	}
-	seconds := newest.FoundAt.Sub(oldest.FoundAt).Seconds()
-	if heightSpan == 0 || seconds <= 0 || totalWork.Sign() <= 0 {
-		return 0, 0
-	}
-	work, _ := new(big.Float).SetInt(totalWork).Float64()
-	return work / seconds, heightSpan
-}
-
 func (s *Server) blockViews(blocks []store.FoundBlock, unit string) []BlockView {
 	result := make([]BlockView, len(blocks))
 	for i, block := range blocks {
@@ -242,7 +201,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	blocks, err := s.store.Blocks("", 121, 0)
+	blocks, err := s.store.Blocks("", 1, 0)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -261,7 +220,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		status.Pool.RoundEffort = effort
 	}
 	status.Network.Height, status.Network.Hashrate, status.Network.Difficulty = controller.Node.Height, mining.NetworkHashrate, mining.NetworkDifficulty
-	status.Network.ObservedHashrate, status.Network.HashrateWindowBlocks = observedNetworkHashrate(blocks, s.cfg.PPLNSWindow)
+	status.Network.ObservedHashrate, status.Network.HashrateWindowBlocks = controller.Node.ObservedHashrate, controller.Node.HashrateWindowBlocks
 	status.Network.ActivationHeight = stratum.ActivationHeight
 	status.Network.MiningActive = mining.MiningActive
 	if controller.Node.Height < stratum.ActivationHeight {
